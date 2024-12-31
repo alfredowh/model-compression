@@ -160,3 +160,10 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+data/imagenet/ILSVRC2012_devkit_t12.tar.gz
+data/imagenet/meta.bin
+data/imagenet/val/*
+.idea/*
+/data/ILSVRC2010_images_test.tar
+/data/patch_images.tar
+/data/ILSVRC2012_img_val.tar
