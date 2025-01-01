@@ -25,6 +25,10 @@ class Pruning():
             list of batch normalization layers to prune
         pruning_ratio: list or float
             list or single prune percentage
+        level: 'layerwise' or 'global'
+            define the pruning level
+        scale_threshold: bool
+            Scale the gamma of batch normalization layers based on sensivity analysis
         Returns
         -------
         torchvision.models
@@ -40,16 +44,19 @@ class Pruning():
 
         if level == 'global':
             # Calculate threshold
-            threshold, scale = self.calculate_threshold(batch_norms, pruning_ratio, scale_threshold)
+            threshold, scales = self.calculate_threshold(batch_norms, pruning_ratio, scale_threshold)
 
-        pruned_channels = {}  # Indices for each layer to keep by pruning
+        pruned_channels = {}    # Indices for each layer to keep by pruning
+        num_gamma = {}          # Number of gamma on each layer
+        num_gamma_pruned = {}   # Number of gamma on each layer after pruning
+
         layer_list = list(self.model.named_modules())
 
         # Analyze BatchNorm scaling factors and determine channels to keep by pruning
         for name, module in self.model.named_modules():
             if isinstance(module, nn.BatchNorm2d) and name in batch_norms:
                 # Get the scale values
-                gamma = module.weight.detach().cpu().numpy()
+                gamma = module.weight
                 num_channels = len(gamma)
 
                 # Determine the number of channels to prune
@@ -58,7 +65,10 @@ class Pruning():
                 if level == 'layerwise':
                     keep_indices = gamma.argsort()[num_prune:]  # Identify the indices of the smallest scale values
                 elif level == 'global':
-                    keep_indices = torch.where(gamma > threshold)[0]  # Identify the indices bigger than threshold
+                    keep_indices = torch.where(gamma / scales[name] > threshold)[0]  # Identify the indices bigger than threshold
+
+                num_gamma[name] = len(gamma)
+                num_gamma_pruned[name] = len(keep_indices)
 
                 pruned_channels[name] = keep_indices
 
@@ -95,17 +105,29 @@ class Pruning():
                         self.prune_layer(next_module, keep_indices, is_input=True)
                         break
                     j += 1
+
+        # Show number of pruned layers
+        diff = [a - b for a, b in zip(list(num_gamma.values()), list(num_gamma_pruned.values()))]
+        bns = " ".join(f"{item:<5}" for item in num_gamma.keys())
+        ori = " ".join(f"{item:<5}" for item in list(num_gamma.values()))
+        pruned = " ".join(f"{item:<5}" for item in list(num_gamma_pruned.values()))
+        print(bns)
+        print(ori)
+        print(pruned)
+        print("-" * 100)
+        print(" ".join(f"{item:<5}" for item in diff))
+
         return self.model
 
     def calculate_threshold(self, batch_norms: List[str], pruning_ratio: float, scale_threshold: bool) -> Tuple[float, np.ndarray]:
 
-        threshold = {}
+        scales = {}
 
         if scale_threshold:
             # Calculate standard deviation of batchnorms gamma
-            std_dev = np.array(
+            std_dev = torch.tensor(
                 [np.std(module.weight.detach().cpu().numpy()) for name, module in self.model.named_modules() if
-                 isinstance(module, nn.BatchNorm2d) and name in batch_norms])
+                 isinstance(module, nn.BatchNorm2d) and name in batch_norms], device=self.device)
 
             # Calculate layer sensivity
             with open('../../notebooks/sensivity_analysis.json', 'r') as f:
@@ -113,39 +135,36 @@ class Pruning():
 
             top5 = 89.956  # Acc@5 of the original model
 
-            layer_sensivity = []
-            for bn in data.keys():
-                scale = top5 / 100 - data[bn]["top5"][-1]
-                layer_sensivity.append(scale)
-
-            scale = std_dev * np.array(layer_sensivity)
-
+            for i, bn in enumerate(data.keys()):
+                layer_sensivity = top5 / 100 - data[bn]["top5"][-1]
+                scales[bn] = torch.tensor(layer_sensivity, device=self.device) * std_dev[i]
 
         else:
-            scale = np.ones(len(batch_norms))   # Threshold scale set to 1
+            for bn in batch_norms:
+                scales[bn] = torch.ones(1, device=self.device)  # Threshold scale set to 1
 
-        all_gammas = torch.cat([module.weight.flatten() * scale[i] for i, (name, module) in enumerate(self.model.named_modules()) if
+        all_gammas = torch.cat([module.weight.flatten() * scales[name] for name, module in self.model.named_modules() if
                                 isinstance(module, nn.BatchNorm2d) and name in batch_norms])
 
         prune_target = int(all_gammas.size(0) * pruning_ratio)
         threshold = torch.topk(all_gammas, prune_target, largest=False).values[-1]
 
 
-        return threshold, scale
+        return threshold, scales
 
     def prune_layer(self, layer: torch.nn.modules, keep_indices: np.ndarray, is_input: bool = False) -> None:
         if isinstance(layer, nn.Conv2d):
             if is_input:
                 # Prune input channels
-                weight = layer.weight.detach().cpu()
-                new_weight = weight[:, torch.tensor(keep_indices)].clone().to(device=self.device)
+                weight = layer.weight
+                new_weight = weight[:, keep_indices].clone().detach().to(device=self.device)
 
                 layer.in_channels = new_weight.size(1)
                 layer.weight = nn.Parameter(new_weight).to(device=self.device)
             else:
                 # Prune output channels
-                weight = layer.weight.detach().cpu()
-                new_weight = weight[torch.tensor(keep_indices)].clone().to(device=self.device)
+                weight = layer.weight
+                new_weight = weight[keep_indices].clone().detach().to(device=self.device)
 
                 layer.out_channels = new_weight.size(0)
                 layer.weight = nn.Parameter(new_weight).to(device=self.device)
@@ -158,24 +177,13 @@ class Pruning():
 
         elif isinstance(layer, nn.BatchNorm2d):
             # Prune BatchNorm parameters
-            layer.weight = nn.Parameter(layer.weight.detach()[torch.tensor(keep_indices)].clone()).to(
+            layer.weight = nn.Parameter(layer.weight.detach()[keep_indices].clone()).to(
                 device=self.device)
-            layer.bias = nn.Parameter(layer.bias.detach()[torch.tensor(keep_indices)].clone()).to(
+            layer.bias = nn.Parameter(layer.bias.detach()[keep_indices].clone()).to(
                 device=self.device)
-            layer.running_mean = layer.running_mean.detach()[torch.tensor(keep_indices)].clone().to(
+            layer.running_mean = layer.running_mean.detach()[keep_indices].clone().to(
                 device=self.device)
-            layer.running_var = layer.running_var.detach()[torch.tensor(keep_indices)].clone().to(
+            layer.running_var = layer.running_var.detach()[keep_indices].clone().to(
                 device=self.device)
 
             layer.num_features = layer.weight.size(0)
-
-    def global_pruning(self, pruning_ratio: float):
-        batch_norms = {}
-        total_channels = 0
-        for name, module in self.model.named_modules():
-            if isinstance(module, nn.BatchNorm2d):
-                # Get the scale values
-                gamma = module.weight.detach().cpu().numpy()
-                batch_norms[name] = gamma
-
-                total_channels += len(gamma)

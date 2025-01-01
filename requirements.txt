@@ -4,4 +4,3 @@ torchaudio
 matplotlib
 numpy
 scipy
-plotly
