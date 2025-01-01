@@ -7,6 +7,9 @@ import json
 import argparse
 from typing import Tuple
 import torch
+from utils.general import increment_path
+from pathlib import Path
+import yaml
 
 
 def test(model, device: torch.device, test_loader: DataLoader) -> Tuple[float, float, float]:
@@ -66,6 +69,10 @@ if __name__ == '__main__':
     parser.add_argument('--test-size', type=float, default=0.2, help='Test split ratio')
     parser.add_argument('--scale-threshold', action="store_true",
                         help='Set scaling threshold for scaling-based pruning based on a heuristic')
+    parser.add_argument('--workers', type=int, default=4, help='maximum number of dataloader workers')
+    parser.add_argument('--project', default='runs/train', help='save to project/name')
+    parser.add_argument('--name', default='exp', help='save to project/name')
+
     opt = parser.parse_args()
 
     if opt.test_size == 0.0:
@@ -73,12 +80,17 @@ if __name__ == '__main__':
     if opt.task == 'sensitivity_analysis' and opt.test_size != 1.0:
         raise UserWarning("Test set size is not 1.0")
 
+    opt.save_dir = increment_path(Path(opt.project) / opt.name)
+
+    with open(opt.save_dir / 'opt.yaml', 'w') as f:
+        yaml.dump(vars(opt), f, sort_keys=False)
+
     # Load dataset
     preprocess = MobileNet_V2_Weights.IMAGENET1K_V1.transforms()
     _, _, test_X, test_Y = train_test_split(test_size=opt.test_size, shuffle=False, num_imgs=50,
                                             root="./data/imagenet")
     test_dataset = ImageNet(test_X, test_Y, transform=preprocess)
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=opt.workers)
 
     # Load full model
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -86,8 +98,8 @@ if __name__ == '__main__':
     model.to(DEVICE).eval()
 
     # Eval full model
-    # accuracy_top1, accuracy_top5, losses = test(model, DEVICE, test_dataloader)
-    # print(f"Full Model - acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {losses}")
+    accuracy_top1, accuracy_top5, losses = test(model, DEVICE, test_dataloader)
+    print(f"Full Model - acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {losses}")
 
     data = {}
     if opt.task == 'global_pruning':
@@ -109,10 +121,8 @@ if __name__ == '__main__':
             accuracy_top1, accuracy_top5, losses = test(model, DEVICE, test_dataloader)
 
             print(
-                f"{batch_norms} ratio: {p} acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {losses}")
+                f"ratio: {p} acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {losses}")
 
-            if data.get(p, -1) == -1:
-                data[batch_norms] = {}
             if data.get("ratio", -1) == -1:
                 data["ratio"] = []
             if data.get("top1", -1) == -1:
@@ -165,5 +175,5 @@ if __name__ == '__main__':
     else:
         raise ValueError("Task not supported")
 
-    with open(f"./runs/{opt.task}.json", "w") as json_file:
+    with open(opt.save_dir / f"{opt.task}.json", "w") as json_file:
         json.dump(data, json_file, indent=2)
