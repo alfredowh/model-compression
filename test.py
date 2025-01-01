@@ -137,7 +137,7 @@ if __name__ == '__main__':
             data['top5'].append(accuracy_top5)
             data['loss'].append(losses)
 
-    elif opt.task == 'sensitivity_analysis':
+    elif opt.task == 'sensivity_analysis':
         for p in opt.ratios:
             for i in range(1, 18):
                 model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
