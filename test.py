@@ -77,7 +77,7 @@ if __name__ == '__main__':
 
     if opt.test_size == 0.0:
         raise ValueError("Test set size should not be 0.0")
-    if opt.task == 'sensitivity_analysis' and opt.test_size != 1.0:
+    if opt.task == 'sensivity_analysis' and opt.test_size != 1.0:
         raise UserWarning("Test set size is not 1.0")
 
     opt.save_dir = increment_path(Path(opt.project) / opt.name)
