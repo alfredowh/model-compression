@@ -90,7 +90,7 @@ if __name__ == '__main__':
     _, _, test_X, test_Y = train_test_split(test_size=opt.test_size, shuffle=False, num_imgs=50,
                                             root="./data/imagenet")
     test_dataset = ImageNet(test_X, test_Y, transform=preprocess)
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=opt.workers)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=opt.workers, pin_memory=True)
 
     # Load full model
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
