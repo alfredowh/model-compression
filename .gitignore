@@ -167,3 +167,4 @@ data/imagenet/val/*
 /data/ILSVRC2010_images_test.tar
 /data/patch_images.tar
 /data/ILSVRC2012_img_val.tar
+mlruns/*
