@@ -139,6 +139,11 @@ if __name__ == '__main__':
 
     elif opt.task == 'sensivity_analysis':
         for p in opt.ratios:
+
+            if data.get("ratio", -1) == -1:
+                data["ratio"] = []
+            data["ratio"].append(p)
+
             for i in range(1, 18):
                 model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
                 model.eval().to(DEVICE)
@@ -159,8 +164,6 @@ if __name__ == '__main__':
 
                 if data.get(batch_norms, -1) == -1:
                     data[batch_norms] = {}
-                if data.get("ratio", -1) == -1:
-                    data["ratio"] = []
                 if data[batch_norms].get('top1', -1) == -1:
                     data[batch_norms]['top1'] = []
                 if data[batch_norms].get('top5', -1) == -1:
@@ -168,7 +171,6 @@ if __name__ == '__main__':
                 if data[batch_norms].get('loss', -1) == -1:
                     data[batch_norms]['loss'] = []
 
-                data["ratio"].append(p)
                 data[batch_norms]['top1'].append(accuracy_top1)
                 data[batch_norms]['top5'].append(accuracy_top5)
                 data[batch_norms]['loss'].append(losses)
