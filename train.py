@@ -62,6 +62,8 @@ def train(model, hyp, opt):
 
         train_total_imgs = 0
         train_correct_imgs = 0
+        running_loss = 0.0
+        running_accuracy = 0.0
 
         for batch_idx, (inputs, targets) in enumerate(train_dataloader):
             batch_size, _, _, _ = inputs.size()
@@ -72,20 +74,21 @@ def train(model, hyp, opt):
             train_loss.backward()
             optimizer.step()
 
-            train_losses.append(train_loss.item() / batch_size)
+            running_loss += train_loss.item() / batch_size
 
             _, predicted = torch.max(outputs, 1)
-            batch_imgs = targets.size(0)
             batch_correct_imgs = (predicted == targets).sum().item()
-            train_total_imgs += batch_imgs
+            train_total_imgs += batch_size
             train_correct_imgs += batch_correct_imgs
 
-            train_accuracy = batch_correct_imgs / batch_imgs
-            train_accuracies.append(train_accuracy)
+            running_accuracy += batch_correct_imgs / batch_size
 
-            if batch_idx % 20 == 0:
+            if batch_idx % 200 == 0:
                 print(
-                    f'Train Epoch: {epoch} [{batch_idx}/{len(train_dataloader)}] \t Loss: {train_loss.item() / batch_size:.4f} \t Training Accuracy: {train_accuracy * 100:.2f}%')
+                    f'Train Epoch: {epoch} [{batch_idx}/{len(train_dataloader)}] \t Loss: {train_loss.item() / batch_size:.4f} \t Training Accuracy: {(batch_correct_imgs / batch_size) * 100:.2f}%')
+
+        train_losses.append(running_loss)
+        train_accuracies.append(running_accuracy)
 
     accuracy_top1, accuracy_top5, test_losses = test(model, device, test_dataloader)
     print(
@@ -128,7 +131,7 @@ if __name__ == '__main__':
 
     # Save run settings
     with open(opt.save_dir / 'hyp.yaml', 'w') as f:
-        yaml.dump(opt.hyp, f, sort_keys=False)
+        yaml.dump(hyp, f, sort_keys=False)
     with open(opt.save_dir / 'opt.yaml', 'w') as f:
         yaml.dump(vars(opt), f, sort_keys=False)
 
