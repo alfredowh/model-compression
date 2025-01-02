@@ -77,7 +77,7 @@ if __name__ == '__main__':
 
     if opt.test_size == 0.0:
         raise ValueError("Test set size should not be 0.0")
-    if opt.task == 'sensitivity_analysis' and opt.test_size != 1.0:
+    if opt.task == 'sensivity_analysis' and opt.test_size != 1.0:
         raise UserWarning("Test set size is not 1.0")
 
     opt.save_dir = increment_path(Path(opt.project) / opt.name)
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     _, _, test_X, test_Y = train_test_split(test_size=opt.test_size, shuffle=False, num_imgs=50,
                                             root="./data/imagenet")
     test_dataset = ImageNet(test_X, test_Y, transform=preprocess)
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=opt.workers)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=opt.workers, pin_memory=True)
 
     # Load full model
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -137,8 +137,13 @@ if __name__ == '__main__':
             data['top5'].append(accuracy_top5)
             data['loss'].append(losses)
 
-    elif opt.task == 'sensitivity_analysis':
+    elif opt.task == 'sensivity_analysis':
         for p in opt.ratios:
+
+            if data.get("ratio", -1) == -1:
+                data["ratio"] = []
+            data["ratio"].append(p)
+
             for i in range(1, 18):
                 model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
                 model.eval().to(DEVICE)
@@ -159,8 +164,6 @@ if __name__ == '__main__':
 
                 if data.get(batch_norms, -1) == -1:
                     data[batch_norms] = {}
-                if data.get("ratio", -1) == -1:
-                    data["ratio"] = []
                 if data[batch_norms].get('top1', -1) == -1:
                     data[batch_norms]['top1'] = []
                 if data[batch_norms].get('top5', -1) == -1:
@@ -168,7 +171,6 @@ if __name__ == '__main__':
                 if data[batch_norms].get('loss', -1) == -1:
                     data[batch_norms]['loss'] = []
 
-                data["ratio"].append(p)
                 data[batch_norms]['top1'].append(accuracy_top1)
                 data[batch_norms]['top5'].append(accuracy_top5)
                 data[batch_norms]['loss'].append(losses)

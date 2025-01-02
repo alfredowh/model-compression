@@ -41,10 +41,10 @@ def train(model, hyp, opt):
     train_X, train_Y, test_X, test_Y = train_test_split(test_size=opt.test_size, shuffle=False, num_imgs=50,
                                             root=opt.root)
     train_dataset = ImageNet(train_X, train_Y, transform=train_transform)
-    train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, generator=generator, num_workers=opt.workers)
+    train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, generator=generator, num_workers=opt.workers, pin_memory=True)
 
     test_dataset = ImageNet(test_X, test_Y, transform=test_transform)
-    test_dataloader = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers)
+    test_dataloader = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers, pin_memory=True)
 
     # Model training
     train_losses = []
@@ -92,6 +92,12 @@ def train(model, hyp, opt):
         f"acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {test_losses}")
 
     return train_losses, train_accuracies, accuracy_top1, accuracy_top5
+
+def calc_total_pruning(ratios):
+    x = 100
+    for r in ratios:
+        x = x - (x * r)
+    return (100 - x) / 100
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='train.py')
@@ -143,7 +149,7 @@ if __name__ == '__main__':
             batch_norms.append(f'features.{i}.conv.1.1')
         for p in opt.ratios:
             model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
-            model.eval().to(device)
+            model.to(device)
 
             pruning = Pruning(model, device)
             model = pruning.scaling_based_pruning(batch_norms=batch_norms, pruning_ratio=p, level='global',
@@ -167,8 +173,53 @@ if __name__ == '__main__':
             data['top5'].append(accuracy_top5)
             data['train_losses'].append(train_losses)
             data['train_accuracies'].append(train_accuracies)
+    elif opt.task == 'iterative_pruning':
+        ratios = [
+            [0.1, 0.3],
+            [0.1, 0.3, 0.5],
+            [0.3, 0.5],
+            [0.3, 0.5, 0.7],
+        ]
+        batch_norms = []
+        for i in range(1, 18):
+            if i == 1:
+                batch_norms.append(f'features.{i}.conv.0.1')
+                continue
+            batch_norms.append(f'features.{i}.conv.1.1')
+        for r in ratios:
+            for i, p in enumerate(r):
+                # Initialize model
+                if i == 0:
+                    model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
+                    model.to(device)
+
+                pruning = Pruning(model, device)
+                model = pruning.scaling_based_pruning(batch_norms=batch_norms, pruning_ratio=p, level='global',
+                                                          scale_threshold=opt.scale_threshold)
+
+
+            train_losses, train_accuracies, accuracy_top1, accuracy_top5 = train(model, hyp, opt)
+
+            # Save metrics
+            if data.get("ratio", -1) == -1:
+                data["ratio"] = []
+            if data.get("top1", -1) == -1:
+                data["top1"] = []
+            if data.get("top5", -1) == -1:
+                data["top5"] = []
+            if data.get("train_losses", -1) == -1:
+                data["train_losses"] = []
+            if data.get("train_accuracies", -1) == -1:
+                data["train_accuracies"] = []
+
+            data["ratio"].append(calc_total_pruning(r))
+            data['top1'].append(accuracy_top1)
+            data['top5'].append(accuracy_top5)
+            data['train_losses'].append(train_losses)
+            data['train_accuracies'].append(train_accuracies)
     else:
         raise ValueError("Task not supported")
 
     with open(opt.save_dir / f"{opt.task}.json", "w") as json_file:
         json.dump(data, json_file, indent=2)
+
