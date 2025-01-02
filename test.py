@@ -70,7 +70,7 @@ if __name__ == '__main__':
     parser.add_argument('--scale-threshold', action="store_true",
                         help='Set scaling threshold for scaling-based pruning based on a heuristic')
     parser.add_argument('--workers', type=int, default=4, help='maximum number of dataloader workers')
-    parser.add_argument('--project', default='runs/train', help='save to project/name')
+    parser.add_argument('--project', default='runs/test', help='save to project/name')
     parser.add_argument('--name', default='exp', help='save to project/name')
 
     opt = parser.parse_args()
