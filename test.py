@@ -81,6 +81,7 @@ if __name__ == '__main__':
         raise UserWarning("Test set size is not 1.0")
 
     opt.save_dir = increment_path(Path(opt.project) / opt.name)
+    opt.save_dir.mkdir(parents=True, exist_ok=True)
 
     with open(opt.save_dir / 'opt.yaml', 'w') as f:
         yaml.dump(vars(opt), f, sort_keys=False)

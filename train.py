@@ -120,6 +120,7 @@ if __name__ == '__main__':
     opt = parser.parse_args()
 
     opt.save_dir = increment_path(Path(opt.project) / opt.name)
+    opt.save_dir.mkdir(parents=True, exist_ok=True)
 
     # Hyperparameters
     with open(opt.hyp) as f:
