@@ -1,4 +1,4 @@
-from typing import List, Union, Optional, Literal, Tuple
+from typing import List, Union, Optional, Literal, Tuple, Dict
 import torch
 import torch.nn as nn
 import numpy as np
@@ -44,7 +44,8 @@ class Pruning():
 
         if level == 'global':
             # Calculate threshold
-            threshold, scales = self.calculate_threshold(batch_norms, pruning_ratio, scale_threshold, pruning_type="scaling")
+            threshold, scales = self.calculate_threshold(batch_norms, pruning_ratio, scale_threshold,
+                                                         pruning_type="scaling")
 
         pruned_channels = {}  # Indices for each layer to keep by pruning
         num_gamma = {}  # Number of gamma on each layer
@@ -68,11 +69,10 @@ class Pruning():
                     keep_indices = torch.where(gamma / scales[name] > threshold)[
                         0]  # Identify the indices bigger than threshold
                     if keep_indices.nelement() == 0:
-                        keep_indices = torch.argmax(gamma)
+                        keep_indices = torch.argmax(gamma).unsqueeze(0)
 
                 num_gamma[name] = len(gamma)
                 num_gamma_pruned[name] = len(keep_indices)
-
                 pruned_channels[name] = keep_indices
 
         # Traverse the model and prune connected layers
@@ -158,7 +158,8 @@ class Pruning():
                     pruned_channels[name] = keep_indices
 
         if level == 'global':
-            threshold, scales = self.calculate_threshold(conv_layers, pruning_ratio, scale_threshold, pruning_type="magnitude")
+            threshold, scales = self.calculate_threshold(conv_layers, pruning_ratio, scale_threshold,
+                                                         pruning_type="magnitude")
 
             for name, module in self.model.named_modules():
                 if isinstance(module, nn.Conv2d) and name in conv_layers:
@@ -167,10 +168,11 @@ class Pruning():
 
                     channel_magnitudes = torch.linalg.norm(weights.view(num_channel, -1), dim=1, ord=ord)
 
-                    keep_indices = torch.where(channel_magnitudes / scales[name] > threshold)[0]  # Identify the indices bigger than threshold
+                    keep_indices = torch.where(channel_magnitudes / scales[name] > threshold)[
+                        0]  # Identify the indices bigger than threshold
 
                     if keep_indices.nelement() == 0:
-                        keep_indices = torch.argmax(channel_magnitudes)
+                        keep_indices = torch.argmax(channel_magnitudes).unsqueeze(0)
 
                     num_channels[name] = num_channel
                     num_channels_pruned[name] = len(keep_indices)
@@ -223,7 +225,8 @@ class Pruning():
 
         return self.model
 
-    def calculate_threshold(self, layer_names: List[str], pruning_ratio: float, scale_threshold: bool, pruning_type: Literal["scaling", "magnitude"]) -> Tuple[
+    def calculate_threshold(self, layer_names: List[str], pruning_ratio: float, scale_threshold: bool,
+                            pruning_type: Literal["scaling", "magnitude"]) -> Tuple[
         float, np.ndarray]:
 
         scales = {}
@@ -249,8 +252,9 @@ class Pruning():
                 for l in layer_names:
                     scales[l] = torch.ones(1, device=self.device)  # Threshold scale set to 1
 
-            all_weights = torch.cat([module.weight.flatten() / scales[name] for name, module in self.model.named_modules() if
-                                isinstance(module, nn.BatchNorm2d) and name in layer_names])
+            all_weights = torch.cat(
+                [module.weight.flatten() / scales[name] for name, module in self.model.named_modules() if
+                 isinstance(module, nn.BatchNorm2d) and name in layer_names])
 
         elif pruning_type == 'magnitude':
             if scale_threshold:
@@ -305,3 +309,12 @@ class Pruning():
                 device=self.device)
 
             layer.num_features = layer.weight.size(0)
+
+    def count_parameters(self) -> Dict[str, int]:
+        data = {}
+        total = 0
+        for name, module in self.model.named_modules():
+            if isinstance(module, torch.nn.Conv2d):
+                data[name] = module.weight.size(0) * module.weight.size(1)
+                total += module.weight.numel()
+        return data, total
