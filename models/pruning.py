@@ -67,6 +67,8 @@ class Pruning():
                 elif level == 'global':
                     keep_indices = torch.where(gamma / scales[name] > threshold)[
                         0]  # Identify the indices bigger than threshold
+                    if keep_indices.nelement() == 0:
+                        keep_indices = torch.argmax(gamma)
 
                 num_gamma[name] = len(gamma)
                 num_gamma_pruned[name] = len(keep_indices)
@@ -166,6 +168,9 @@ class Pruning():
                     channel_magnitudes = torch.linalg.norm(weights.view(num_channel, -1), dim=1, ord=ord)
 
                     keep_indices = torch.where(channel_magnitudes / scales[name] > threshold)[0]  # Identify the indices bigger than threshold
+
+                    if keep_indices.nelement() == 0:
+                        keep_indices = torch.argmax(channel_magnitudes)
 
                     num_channels[name] = num_channel
                     num_channels_pruned[name] = len(keep_indices)
