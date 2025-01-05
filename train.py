@@ -12,24 +12,24 @@ import json
 from utils.general import increment_path
 from pathlib import Path
 
-def train(model, hyp, opt):
 
+def train(model, hyp, opt):
     torch.manual_seed(opt.seed)
     torch.cuda.manual_seed_all(opt.seed)
     np.random.seed(opt.seed)
     generator = torch.Generator()
-    generator.manual_seed(opt.seed)     # randomness of the dataloader
+    generator.manual_seed(opt.seed)  # randomness of the dataloader
 
     # Load dataset
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
     train_transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.RandomCrop(224),
-            transforms.RandomHorizontalFlip(hyp.get('fliph', 0.0)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std)
-        ])
+        transforms.Resize(256),
+        transforms.RandomCrop(224),
+        transforms.RandomHorizontalFlip(hyp.get('fliph', 0.0)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std)
+    ])
     test_transform = transforms.Compose(
         [
             transforms.Resize(256),
@@ -39,12 +39,14 @@ def train(model, hyp, opt):
         ]
     )
     train_X, train_Y, test_X, test_Y = train_test_split(test_size=opt.test_size, shuffle=False, num_imgs=50,
-                                            root=opt.root)
+                                                        root=opt.root)
     train_dataset = ImageNet(train_X, train_Y, transform=train_transform)
-    train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, generator=generator, num_workers=opt.workers, pin_memory=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, generator=generator,
+                                  num_workers=opt.workers, pin_memory=True)
 
     test_dataset = ImageNet(test_X, test_Y, transform=test_transform)
-    test_dataloader = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers, pin_memory=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.workers,
+                                 pin_memory=True)
 
     # Model training
     train_losses = []
@@ -52,9 +54,11 @@ def train(model, hyp, opt):
     loss_fn = torch.nn.CrossEntropyLoss()
 
     if opt.adam:
-        optimizer = torch.optim.Adam(model.parameters(), lr=hyp.get('lr', 1e-3), betas=(hyp.get('momentum', 0.9), 0.999), weight_decay=hyp.get('weight_decay', 0))
+        optimizer = torch.optim.Adam(model.parameters(), lr=hyp.get('lr', 1e-3),
+                                     betas=(hyp.get('momentum', 0.9), 0.999), weight_decay=hyp.get('weight_decay', 0))
     else:
-        optimizer = torch.optim.SGD(model.parameters(), lr=hyp['lr'], momentum=hyp['momentum'], weight_decay=hyp.get('weight_decay', 0), nesterov=False)
+        optimizer = torch.optim.SGD(model.parameters(), lr=hyp['lr'], momentum=hyp['momentum'],
+                                    weight_decay=hyp.get('weight_decay', 0), nesterov=False)
 
     print("Training starts ...")
     for epoch in range(opt.epochs):
@@ -87,11 +91,18 @@ def train(model, hyp, opt):
         train_losses.append(running_loss / len(train_dataloader))
         train_accuracies.append(train_correct_imgs / train_total_imgs * 100)
 
+    # Save last, best and delete
+    wdir = opt.save_dir / 'weights'
+    wdir.mkdir(parents=True, exist_ok=True)  # make dir
+    last = wdir / f'last_{opt.p}.pt'
+    torch.save(model, last)
+
     accuracy_top1, accuracy_top5, test_losses = test(model, device, test_dataloader)
     print(
         f"acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {test_losses}")
 
     return train_losses, train_accuracies, accuracy_top1, accuracy_top5
+
 
 def calc_total_pruning(ratios):
     x = 100
@@ -99,11 +110,13 @@ def calc_total_pruning(ratios):
         x = x - (x * r)
     return (100 - x) / 100
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='train.py')
     parser.add_argument('--ratios', nargs='+', type=int, default=[0.1, 0.3, 0.5, 0.7, 0.9],
                         help='Pruning ratio for eval iteration')
     parser.add_argument('--task', type=str, default='retraining', help='retraining or iterative_pruning')
+    parser.add_argument('--pruning-type', type=str, default='batchnorm', help='batchnorm or magnitude')
     parser.add_argument('--seed', type=float, default=42, help='Test split ratio')
     parser.add_argument('--hyp', type=str, default='data/hyp.retraining.yaml', help='hyperparameters path')
     parser.add_argument('--root', type=str, default='data/imagenet', help='Imagenet root path')
@@ -149,6 +162,7 @@ if __name__ == '__main__':
                 continue
             batch_norms.append(f'features.{i}.conv.1.1')
         for p in opt.ratios:
+            opt.p = p
             model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
             model.to(device)
 
@@ -181,12 +195,25 @@ if __name__ == '__main__':
             [0.3, 0.5],
             [0.3, 0.5, 0.7],
         ]
-        batch_norms = []
-        for i in range(1, 18):
-            if i == 1:
-                batch_norms.append(f'features.{i}.conv.0.1')
-                continue
-            batch_norms.append(f'features.{i}.conv.1.1')
+        pruned_layers = []
+        if opt.pruning_type == 'batchnorm':
+            for i in range(1, 18):
+                if i == 1:
+                    pruned_layers.append(f'features.{i}.conv.0.1')
+                    continue
+                pruned_layers.append(f'features.{i}.conv.1.1')
+        elif opt.pruning_type == 'magnitude':
+            pruned_layers = []
+            for i in range(0, 18):
+                if i == 0:
+                    pruned_layers.append(f'features.{i}.0')
+                    continue
+                if i == 1:
+                    continue
+                pruned_layers.append(f'features.{i}.conv.0.0')
+        else:
+            raise ValueError("Pruning type not supported")
+
         for r in ratios:
             for i, p in enumerate(r):
                 # Initialize model
@@ -195,9 +222,12 @@ if __name__ == '__main__':
                     model.to(device)
 
                 pruning = Pruning(model, device)
-                model = pruning.scaling_based_pruning(batch_norms=batch_norms, pruning_ratio=p, level='global',
+                if opt.pruning_type == "batchnorm":
+                    model = pruning.scaling_based_pruning(batch_norms=pruned_layers, pruning_ratio=p, level='global',
                                                           scale_threshold=opt.scale_threshold)
-
+                elif opt.pruning_type == "magnitude":
+                    model = pruning.magnitude_based_pruning(conv_layers=pruned_layers, pruning_ratio=p, level='global',
+                                                            scale_threshold=opt.scale_threshold)
 
             train_losses, train_accuracies, accuracy_top1, accuracy_top5 = train(model, hyp, opt)
 
@@ -223,4 +253,3 @@ if __name__ == '__main__':
 
     with open(opt.save_dir / f"{opt.task}.json", "w") as json_file:
         json.dump(data, json_file, indent=2)
-
