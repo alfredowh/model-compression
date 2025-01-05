@@ -155,20 +155,36 @@ if __name__ == '__main__':
 
     data = {}
     if opt.task == 'retraining':
-        batch_norms = []
-        for i in range(1, 18):
-            if i == 1:
-                batch_norms.append(f'features.{i}.conv.0.1')
-                continue
-            batch_norms.append(f'features.{i}.conv.1.1')
+        pruned_layers = []
+        if opt.pruning_type == 'batchnorm':
+            for i in range(1, 18):
+                if i == 1:
+                    pruned_layers.append(f'features.{i}.conv.0.1')
+                    continue
+                pruned_layers.append(f'features.{i}.conv.1.1')
+        elif opt.pruning_type == 'magnitude':
+            for i in range(0, 18):
+                if i == 0:
+                    pruned_layers.append(f'features.{i}.0')
+                    continue
+                if i == 1:
+                    continue
+                pruned_layers.append(f'features.{i}.conv.0.0')
+        else:
+            raise ValueError("Pruning type not supported")
+
         for p in opt.ratios:
             opt.p = p
             model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
             model.to(device)
 
             pruning = Pruning(model, device)
-            model = pruning.scaling_based_pruning(batch_norms=batch_norms, pruning_ratio=p, level='global',
+            if opt.pruning_type == "batchnorm":
+                model = pruning.scaling_based_pruning(batch_norms=pruned_layers, pruning_ratio=p, level='global',
                                                   scale_threshold=opt.scale_threshold)
+            elif opt.pruning_type == "magnitude":
+                model = pruning.magnitude_based_pruning(conv_layers=pruned_layers, pruning_ratio=p, level='global',
+                                                    scale_threshold=opt.scale_threshold)
 
             train_losses, train_accuracies, accuracy_top1, accuracy_top5 = train(model, hyp, opt)
 
@@ -203,7 +219,6 @@ if __name__ == '__main__':
                     continue
                 pruned_layers.append(f'features.{i}.conv.1.1')
         elif opt.pruning_type == 'magnitude':
-            pruned_layers = []
             for i in range(0, 18):
                 if i == 0:
                     pruned_layers.append(f'features.{i}.0')
