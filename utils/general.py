@@ -5,7 +5,7 @@ import re
 def increment_path(path):
     path = Path(path)
     if not path.exists():
-        return str(path)
+        return path
     else:
         dirs = glob.glob(f"{path}*")  # similar paths
         matches = [re.search(rf"%s(\d+)" % path.stem, d) for d in dirs]
