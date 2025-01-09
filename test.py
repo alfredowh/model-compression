@@ -66,6 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('--ratios', nargs='+', type=int, default=[0.1, 0.3, 0.5, 0.7, 0.9],
                         help='Pruning ratio for eval iteration')
     parser.add_argument('--task', type=str, default='global_pruning', help='global_pruning or sensivity_analysis')
+    parser.add_argument('--pruning-type', type=str, default='batchnorm', help='batchnorm or magnitude')
     parser.add_argument('--test-size', type=float, default=0.2, help='Test split ratio')
     parser.add_argument('--scale-threshold', action="store_true",
                         help='Set scaling threshold for scaling-based pruning based on a heuristic')
@@ -140,41 +141,80 @@ if __name__ == '__main__':
 
     elif opt.task == 'sensivity_analysis':
         for p in opt.ratios:
+            if opt.pruning_type == "batchnorm":
+                if data.get("ratio", -1) == -1:
+                    data["ratio"] = []
+                data["ratio"].append(p)
 
-            if data.get("ratio", -1) == -1:
-                data["ratio"] = []
-            data["ratio"].append(p)
+                for i in range(1, 18):
+                    model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
+                    model.eval().to(DEVICE)
 
-            for i in range(1, 18):
-                model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
-                model.eval().to(DEVICE)
+                    if i == 1:
+                        batch_norms = f'features.{i}.conv.0.1'
+                    else:
+                        batch_norms = f'features.{i}.conv.1.1'
 
-                if i == 1:
-                    batch_norms = f'features.{i}.conv.0.1'
-                else:
-                    batch_norms = f'features.{i}.conv.1.1'
+                    pruning = Pruning(model, DEVICE)
+                    model = pruning.scaling_based_pruning(batch_norms=batch_norms, pruning_ratio=p, level='layerwise',
+                                                          scale_threshold=False)
 
-                pruning = Pruning(model, DEVICE)
-                model = pruning.scaling_based_pruning(batch_norms=batch_norms, pruning_ratio=p, level='layerwise',
-                                                      scale_threshold=False)
+                    accuracy_top1, accuracy_top5, losses = test(model, DEVICE, test_dataloader)
 
-                accuracy_top1, accuracy_top5, losses = test(model, DEVICE, test_dataloader)
+                    print(
+                        f"{batch_norms} ratio: {p} acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {losses}")
 
-                print(
-                    f"{batch_norms} ratio: {p} acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {losses}")
+                    if data.get(batch_norms, -1) == -1:
+                        data[batch_norms] = {}
+                    if data[batch_norms].get('top1', -1) == -1:
+                        data[batch_norms]['top1'] = []
+                    if data[batch_norms].get('top5', -1) == -1:
+                        data[batch_norms]['top5'] = []
+                    if data[batch_norms].get('loss', -1) == -1:
+                        data[batch_norms]['loss'] = []
 
-                if data.get(batch_norms, -1) == -1:
-                    data[batch_norms] = {}
-                if data[batch_norms].get('top1', -1) == -1:
-                    data[batch_norms]['top1'] = []
-                if data[batch_norms].get('top5', -1) == -1:
-                    data[batch_norms]['top5'] = []
-                if data[batch_norms].get('loss', -1) == -1:
-                    data[batch_norms]['loss'] = []
+                    data[batch_norms]['top1'].append(accuracy_top1)
+                    data[batch_norms]['top5'].append(accuracy_top5)
+                    data[batch_norms]['loss'].append(losses)
 
-                data[batch_norms]['top1'].append(accuracy_top1)
-                data[batch_norms]['top5'].append(accuracy_top5)
-                data[batch_norms]['loss'].append(losses)
+            elif opt.pruning_type == "magnitude":
+                if data.get("ratio", -1) == -1:
+                    data["ratio"] = []
+                data["ratio"].append(p)
+
+                for i in range(0, 18):
+                    model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
+                    model.eval().to(DEVICE)
+
+                    if i == 0:
+                        pruned_layers = f'features.{i}.0'
+                        continue
+                    if i == 1:
+                        continue
+                    pruned_layers = f'features.{i}.conv.0.0'
+
+                    pruning = Pruning(model, DEVICE)
+                    model = pruning.magnitude_based_pruning(conv_layers=pruned_layers, pruning_ratio=p,
+                                                            level='layerwise',
+                                                            scale_threshold=False)
+
+                    accuracy_top1, accuracy_top5, losses = test(model, DEVICE, test_dataloader)
+
+                    print(
+                        f"{pruned_layers} ratio: {p} acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {losses}")
+
+                    if data.get(pruned_layers, -1) == -1:
+                        data[pruned_layers] = {}
+                    if data[pruned_layers].get('top1', -1) == -1:
+                        data[pruned_layers]['top1'] = []
+                    if data[pruned_layers].get('top5', -1) == -1:
+                        data[pruned_layers]['top5'] = []
+                    if data[pruned_layers].get('loss', -1) == -1:
+                        data[pruned_layers]['loss'] = []
+
+                    data[pruned_layers]['top1'].append(accuracy_top1)
+                    data[pruned_layers]['top5'].append(accuracy_top5)
+                    data[pruned_layers]['loss'].append(losses)
     else:
         raise ValueError("Task not supported")
 

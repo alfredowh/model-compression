@@ -117,6 +117,7 @@ if __name__ == '__main__':
                         help='Pruning ratio for eval iteration')
     parser.add_argument('--task', type=str, default='retraining', help='retraining or iterative_pruning')
     parser.add_argument('--pruning-type', type=str, default='batchnorm', help='batchnorm or magnitude')
+    parser.add_argument('--uniform', action='store_true', help='apply uniform pruning')
     parser.add_argument('--seed', type=float, default=42, help='Test split ratio')
     parser.add_argument('--hyp', type=str, default='data/hyp.retraining.yaml', help='hyperparameters path')
     parser.add_argument('--root', type=str, default='data/imagenet', help='Imagenet root path')
@@ -179,12 +180,14 @@ if __name__ == '__main__':
             model.to(device)
 
             pruning = Pruning(model, device)
+            level = "layerwise" if opt.uniform else "global"
+
             if opt.pruning_type == "batchnorm":
-                model = pruning.scaling_based_pruning(batch_norms=pruned_layers, pruning_ratio=p, level='global',
-                                                  scale_threshold=opt.scale_threshold)
+                model = pruning.scaling_based_pruning(batch_norms=pruned_layers, pruning_ratio=p, level=level,
+                                                      scale_threshold=opt.scale_threshold)
             elif opt.pruning_type == "magnitude":
-                model = pruning.magnitude_based_pruning(conv_layers=pruned_layers, pruning_ratio=p, level='global',
-                                                    scale_threshold=opt.scale_threshold)
+                model = pruning.magnitude_based_pruning(conv_layers=pruned_layers, pruning_ratio=p, level=level,
+                                                        scale_threshold=opt.scale_threshold)
 
             train_losses, train_accuracies, accuracy_top1, accuracy_top5 = train(model, hyp, opt)
 

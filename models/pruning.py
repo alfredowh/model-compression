@@ -1,4 +1,5 @@
-from typing import List, Union, Optional, Literal, Tuple
+import os
+from typing import List, Union, Optional, Literal, Tuple, Dict
 import torch
 import torch.nn as nn
 import numpy as np
@@ -44,7 +45,8 @@ class Pruning():
 
         if level == 'global':
             # Calculate threshold
-            threshold, scales = self.calculate_threshold(batch_norms, pruning_ratio, scale_threshold, pruning_type="scaling")
+            threshold, scales = self.calculate_threshold(batch_norms, pruning_ratio, scale_threshold,
+                                                         pruning_type="scaling")
 
         pruned_channels = {}  # Indices for each layer to keep by pruning
         num_gamma = {}  # Number of gamma on each layer
@@ -67,10 +69,11 @@ class Pruning():
                 elif level == 'global':
                     keep_indices = torch.where(gamma / scales[name] > threshold)[
                         0]  # Identify the indices bigger than threshold
+                    if keep_indices.nelement() == 0:
+                        keep_indices = torch.argmax(gamma).unsqueeze(0)
 
                 num_gamma[name] = len(gamma)
                 num_gamma_pruned[name] = len(keep_indices)
-
                 pruned_channels[name] = keep_indices
 
         # Traverse the model and prune connected layers
@@ -116,7 +119,7 @@ class Pruning():
         print(ori)
         print(pruned)
         print("-" * 100)
-        print(" ".join(f"{item:<5}" for item in diff))
+        print(" ".join(f"{item:<5}" if item > 0 else f"{str(1):<5}" for item in diff))
 
         return self.model
 
@@ -156,7 +159,8 @@ class Pruning():
                     pruned_channels[name] = keep_indices
 
         if level == 'global':
-            threshold, scales = self.calculate_threshold(conv_layers, pruning_ratio, scale_threshold, pruning_type="magnitude")
+            threshold, scales = self.calculate_threshold(conv_layers, pruning_ratio, scale_threshold,
+                                                         pruning_type="magnitude")
 
             for name, module in self.model.named_modules():
                 if isinstance(module, nn.Conv2d) and name in conv_layers:
@@ -165,7 +169,11 @@ class Pruning():
 
                     channel_magnitudes = torch.linalg.norm(weights.view(num_channel, -1), dim=1, ord=ord)
 
-                    keep_indices = torch.where(channel_magnitudes / scales[name] > threshold)[0]  # Identify the indices bigger than threshold
+                    keep_indices = torch.where(channel_magnitudes * scales[name] > threshold)[
+                        0]  # Identify the indices bigger than threshold
+
+                    if keep_indices.nelement() == 0:
+                        keep_indices = torch.argmax(channel_magnitudes).unsqueeze(0)
 
                     num_channels[name] = num_channel
                     num_channels_pruned[name] = len(keep_indices)
@@ -214,11 +222,12 @@ class Pruning():
         print(ori)
         print(pruned)
         print("-" * 100)
-        print(" ".join(f"{item:<5}" for item in diff))
+        print(" ".join(f"{item:<5}" if item > 0 else f"{str(1):<5}" for item in diff))
 
         return self.model
 
-    def calculate_threshold(self, layer_names: List[str], pruning_ratio: float, scale_threshold: bool, pruning_type: Literal["scaling", "magnitude"]) -> Tuple[
+    def calculate_threshold(self, layer_names: List[str], pruning_ratio: float, scale_threshold: bool,
+                            pruning_type: Literal["scaling", "magnitude"], top5: float = 90.31) -> Tuple[
         float, np.ndarray]:
 
         scales = {}
@@ -231,25 +240,41 @@ class Pruning():
                      isinstance(module, nn.BatchNorm2d) and name in layer_names], device=self.device)
 
                 # Calculate layer sensivity
-                with open('../../notebooks/sensivity_analysis.json', 'r') as f:
+                with open('../runs/scaling_pruning/sensivity_analysis.json', 'r') as f:
                     data = json.load(f)
 
-                top5 = 89.956  # Acc@5 of the original model
-
-                for i, bn in enumerate(data.keys()):
-                    layer_sensivity = top5 / 100 - data[bn]["top5"][-1]
-                    scales[bn] = torch.tensor(layer_sensivity, device=self.device) * std_dev[i]
+                i = 0
+                for bn in data.keys():
+                    if bn != 'ratio':
+                        layer_sensivity = top5 / 100 - data[bn]["top5"][-1]
+                        scales[bn] = torch.tensor(layer_sensivity, device=self.device) / std_dev[i]
+                        i += 1
 
             else:
                 for l in layer_names:
                     scales[l] = torch.ones(1, device=self.device)  # Threshold scale set to 1
 
-            all_weights = torch.cat([module.weight.flatten() / scales[name] for name, module in self.model.named_modules() if
-                                isinstance(module, nn.BatchNorm2d) and name in layer_names])
+            all_weights = torch.cat(
+                [module.weight.flatten() * scales[name] for name, module in self.model.named_modules() if
+                 isinstance(module, nn.BatchNorm2d) and name in layer_names])
 
         elif pruning_type == 'magnitude':
             if scale_threshold:
-                raise ValueError("TODO!")
+                std_dev = np.array(
+                    [np.std(module.weight.detach().cpu().numpy()) for name, module in self.model.named_modules() if
+                     name in layer_names])
+
+                # Calculate layer sensivity
+                with open('../runs/magnitude_pruning/sensivity_analysis.json', 'r') as f:
+                    data = json.load(f)
+
+                i = 0
+                for cv in data.keys():
+                    if cv != 'ratio':
+                        layer_sensivity = top5 / 100 - data[cv]["top5"][1]
+                        scales[cv] = torch.tensor(layer_sensivity, device=self.device) / std_dev[i]
+                        i += 1
+
             else:
                 for l in layer_names:
                     scales[l] = torch.ones(1, device=self.device)  # Threshold scale set to 1
@@ -300,3 +325,12 @@ class Pruning():
                 device=self.device)
 
             layer.num_features = layer.weight.size(0)
+
+    def count_parameters(self) -> Dict[str, int]:
+        data = {}
+        total = 0
+        for name, module in self.model.named_modules():
+            if isinstance(module, torch.nn.Conv2d):
+                data[name] = module.weight.size(0) * module.weight.size(1)
+                total += module.weight.numel()
+        return data, total
