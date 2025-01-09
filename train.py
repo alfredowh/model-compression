@@ -113,7 +113,7 @@ def calc_total_pruning(ratios):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='train.py')
-    parser.add_argument('--ratios', nargs='+', type=int, default=[0.1, 0.3, 0.5, 0.7, 0.9],
+    parser.add_argument('--ratios', nargs='+', type=float, default=[0.1, 0.3, 0.5, 0.7, 0.9],
                         help='Pruning ratio for eval iteration')
     parser.add_argument('--task', type=str, default='retraining', help='retraining or iterative_pruning')
     parser.add_argument('--pruning-type', type=str, default='batchnorm', help='batchnorm or magnitude')
