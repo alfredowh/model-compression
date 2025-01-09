@@ -63,7 +63,7 @@ def test(model, device: torch.device, test_loader: DataLoader) -> Tuple[float, f
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
-    parser.add_argument('--ratios', nargs='+', type=int, default=[0.1, 0.3, 0.5, 0.7, 0.9],
+    parser.add_argument('--ratios', nargs='+', type=float, default=[0.1, 0.3, 0.5, 0.7, 0.9],
                         help='Pruning ratio for eval iteration')
     parser.add_argument('--task', type=str, default='global_pruning', help='global_pruning or sensivity_analysis')
     parser.add_argument('--pruning-type', type=str, default='batchnorm', help='batchnorm or magnitude')
@@ -188,10 +188,10 @@ if __name__ == '__main__':
 
                     if i == 0:
                         pruned_layers = f'features.{i}.0'
+                    elif i == 1:
                         continue
-                    if i == 1:
-                        continue
-                    pruned_layers = f'features.{i}.conv.0.0'
+                    else:
+                        pruned_layers = f'features.{i}.conv.0.0'
 
                     pruning = Pruning(model, DEVICE)
                     model = pruning.magnitude_based_pruning(conv_layers=pruned_layers, pruning_ratio=p,
