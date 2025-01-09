@@ -55,10 +55,11 @@ def train(model, hyp, opt):
 
     if opt.adam:
         optimizer = torch.optim.Adam(model.parameters(), lr=hyp.get('lr', 1e-3),
-                                     betas=(hyp.get('momentum', 0.9), 0.999), weight_decay=hyp.get('weight_decay', 0))
+                                     betas=(float(hyp.get('momentum', 0.9)), 0.999),
+                                     weight_decay=float(hyp.get('weight_decay', 0)))
     else:
         optimizer = torch.optim.SGD(model.parameters(), lr=hyp['lr'], momentum=hyp['momentum'],
-                                    weight_decay=hyp.get('weight_decay', 0), nesterov=False)
+                                    weight_decay=float(hyp.get('weight_decay', 0)), nesterov=False)
 
     print("Training starts ...")
     for epoch in range(opt.epochs):
