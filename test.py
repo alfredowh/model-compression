@@ -67,6 +67,7 @@ if __name__ == '__main__':
                         help='Pruning ratio for eval iteration')
     parser.add_argument('--task', type=str, default='global_pruning', help='global_pruning or sensivity_analysis')
     parser.add_argument('--pruning-type', type=str, default='batchnorm', help='batchnorm or magnitude')
+    parser.add_argument('--level', type=str, default='global', help='global or layerwise')
     parser.add_argument('--test-size', type=float, default=0.2, help='Test split ratio')
     parser.add_argument('--scale-threshold', action="store_true",
                         help='Set scaling threshold for scaling-based pruning based on a heuristic')
@@ -105,20 +106,35 @@ if __name__ == '__main__':
 
     data = {}
     if opt.task == 'global_pruning':
-        batch_norms = []
-        for i in range(1, 18):
-            if i == 1:
-                batch_norms.append(f'features.{i}.conv.0.1')
-                continue
-            batch_norms.append(f'features.{i}.conv.1.1')
+        pruned_layers = []
+        if opt.pruning_type == 'batchnorm':
+            for i in range(1, 18):
+                if i == 1:
+                    pruned_layers.append(f'features.{i}.conv.0.1')
+                    continue
+                pruned_layers.append(f'features.{i}.conv.1.1')
+        elif opt.pruning_type == 'magnitude':
+            for i in range(0, 18):
+                if i == 0:
+                    pruned_layers.append(f'features.{i}.0')
+                    continue
+                if i == 1:
+                    continue
+                pruned_layers.append(f'features.{i}.conv.0.0')
+        else:
+            raise ValueError("Pruning type not supported")
 
         for p in opt.ratios:
             model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
             model.eval().to(DEVICE)
 
             pruning = Pruning(model, DEVICE)
-            model = pruning.scaling_based_pruning(batch_norms=batch_norms, pruning_ratio=p, level='global',
-                                                  scale_threshold=opt.scale_threshold)
+            if opt.pruning_type == 'batchnorm':
+                model = pruning.scaling_based_pruning(batch_norms=pruned_layers, pruning_ratio=p, level=opt.level,
+                                                      scale_threshold=opt.scale_threshold)
+            elif opt.pruning_type == 'magnitude':
+                model = pruning.scaling_based_pruning(conv_layers=pruned_layers, pruning_ratio=p, level=opt.level,
+                                                      scale_threshold=opt.scale_threshold)
 
             accuracy_top1, accuracy_top5, losses = test(model, DEVICE, test_dataloader)
 
