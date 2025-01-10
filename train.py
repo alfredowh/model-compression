@@ -93,10 +93,11 @@ def train(model, hyp, opt):
         train_accuracies.append(train_correct_imgs / train_total_imgs * 100)
 
     # Save last, best and delete
-    wdir = opt.save_dir / 'weights'
-    wdir.mkdir(parents=True, exist_ok=True)  # make dir
-    last = wdir / f'last_{opt.p}.pt'
-    torch.save(model, last)
+    if opt.save_weight:
+        wdir = opt.save_dir / 'weights'
+        wdir.mkdir(parents=True, exist_ok=True)  # make dir
+        last = wdir / f'last_{opt.p}.pt'
+        torch.save(model, last)
 
     accuracy_top1, accuracy_top5, test_losses = test(model, device, test_dataloader)
     print(
@@ -118,6 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--weights', type=str, default='MobileNet_V2_Weights.IMAGENET1K_V1', help='Pretrained weights')
     parser.add_argument('--epochs', type=int, default=10, help='Training epochs')
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')
+    parser.add_argument('--save-weight', action='store_true', help='save weights')
     parser.add_argument('--batch-size', type=int, default=16, help='total batch size')
     parser.add_argument('--test-size', type=float, default=0.2, help='total batch size')
     parser.add_argument('--scale-threshold', action="store_true",
@@ -228,6 +230,8 @@ if __name__ == '__main__':
 
         for r in ratios:
             for i, p in enumerate(r):
+                opt.p = p
+
                 # Initialize model
                 if i == 0:
                     model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1')
@@ -241,7 +245,7 @@ if __name__ == '__main__':
                     model = pruning.magnitude_based_pruning(conv_layers=pruned_layers, pruning_ratio=p, level='global',
                                                             scale_threshold=opt.scale_threshold)
 
-            train_losses, train_accuracies, accuracy_top1, accuracy_top5 = train(model, hyp, opt)
+                train_losses, train_accuracies, accuracy_top1, accuracy_top5 = train(model, hyp, opt)
 
             # Save metrics
             if data.get("ratio", -1) == -1:
