@@ -26,7 +26,7 @@ def train(model, hyp, opt):
     train_transform = transforms.Compose([
         transforms.Resize(256),
         transforms.RandomCrop(224),
-        transforms.RandomHorizontalFlip(hyp.get('fliph', 0.0)),
+        transforms.RandomHorizontalFlip(float(hyp.get('fliph', 0.0))),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ])
@@ -55,10 +55,11 @@ def train(model, hyp, opt):
 
     if opt.adam:
         optimizer = torch.optim.Adam(model.parameters(), lr=hyp.get('lr', 1e-3),
-                                     betas=(hyp.get('momentum', 0.9), 0.999), weight_decay=hyp.get('weight_decay', 0))
+                                     betas=(float(hyp.get('momentum', 0.9)), 0.999),
+                                     weight_decay=float(hyp.get('weight_decay', 0)))
     else:
         optimizer = torch.optim.SGD(model.parameters(), lr=hyp['lr'], momentum=hyp['momentum'],
-                                    weight_decay=hyp.get('weight_decay', 0), nesterov=False)
+                                    weight_decay=float(hyp.get('weight_decay', 0)), nesterov=False)
 
     print("Training starts ...")
     for epoch in range(opt.epochs):
@@ -113,7 +114,7 @@ def calc_total_pruning(ratios):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='train.py')
-    parser.add_argument('--ratios', nargs='+', type=int, default=[0.1, 0.3, 0.5, 0.7, 0.9],
+    parser.add_argument('--ratios', nargs='+', type=float, default=[0.1, 0.3, 0.5, 0.7, 0.9],
                         help='Pruning ratio for eval iteration')
     parser.add_argument('--task', type=str, default='retraining', help='retraining or iterative_pruning')
     parser.add_argument('--pruning-type', type=str, default='batchnorm', help='batchnorm or magnitude')
