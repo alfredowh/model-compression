@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import argparse
 import numpy as np
 from torchvision.models import MobileNet_V2_Weights
@@ -13,7 +14,7 @@ from utils.general import increment_path, calc_total_ratio
 from pathlib import Path
 
 
-def train(model, hyp, opt):
+def train(model, hyp, opt, teacher=None):
     torch.manual_seed(opt.seed)
     torch.cuda.manual_seed_all(opt.seed)
     np.random.seed(opt.seed)
@@ -61,6 +62,7 @@ def train(model, hyp, opt):
         optimizer = torch.optim.SGD(model.parameters(), lr=hyp['lr'], momentum=hyp['momentum'],
                                     weight_decay=float(hyp.get('weight_decay', 0)), nesterov=False)
 
+
     print("Training starts ...")
     for epoch in range(opt.epochs):
         model.train()
@@ -74,7 +76,29 @@ def train(model, hyp, opt):
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
+
             train_loss = loss_fn(outputs, targets)
+
+            if opt.kd:
+                with torch.no_grad():
+                    teacher_logits = teacher(inputs)
+
+                T = float(hyp.get("temperature", 2))    # temperature
+
+                # Soften the student logits by applying softmax first and log() second
+                soft_targets = nn.functional.softmax(teacher_logits / T, dim=-1)
+                soft_prob = nn.functional.log_softmax(outputs / T, dim=-1)
+
+                # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
+                soft_targets_loss = torch.sum(soft_targets * (soft_targets.log() - soft_prob)) / soft_prob.size()[
+                    0] * (T ** 2)
+
+                # Weighted sum of the two losses
+                kd_loss_weight = float(hyp.get("kd_loss_weight", 0.25))
+                ce_loss_weight = float(hyp.get("ce_weight", 0.75))
+
+                train_loss = kd_loss_weight * soft_targets_loss + ce_loss_weight * train_loss
+
             train_loss.backward()
             optimizer.step()
 
@@ -120,6 +144,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=10, help='Training epochs')
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')
     parser.add_argument('--save-weight', action='store_true', help='save weights')
+    parser.add_argument('--kd', action='store_true', help='Knowledge distillation')
     parser.add_argument('--batch-size', type=int, default=16, help='total batch size')
     parser.add_argument('--test-size', type=float, default=0.2, help='total batch size')
     parser.add_argument('--scale-threshold', action="store_true",
@@ -185,7 +210,13 @@ if __name__ == '__main__':
                 model = pruning.magnitude_based_pruning(conv_layers=pruned_layers, pruning_ratio=p, level=level,
                                                         scale_threshold=opt.scale_threshold)
 
-            train_losses, train_accuracies, accuracy_top1, accuracy_top5 = train(model, hyp, opt)
+            opt.kd = True
+
+            if opt.kd:
+                teacher_model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1').to(device).eval()
+                train_losses, train_accuracies, accuracy_top1, accuracy_top5 = train(model, hyp, opt, teacher_model)
+            else:
+                train_losses, train_accuracies, accuracy_top1, accuracy_top5 = train(model, hyp, opt)
 
             if data.get("ratio", -1) == -1:
                 data["ratio"] = []
