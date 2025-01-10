@@ -26,7 +26,7 @@ def train(model, hyp, opt):
     train_transform = transforms.Compose([
         transforms.Resize(256),
         transforms.RandomCrop(224),
-        transforms.RandomHorizontalFlip(hyp.get('fliph', 0.0)),
+        transforms.RandomHorizontalFlip(float(hyp.get('fliph', 0.0))),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ])
