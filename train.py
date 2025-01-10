@@ -9,7 +9,7 @@ from torchvision import transforms, models
 from test import test
 import yaml
 import json
-from utils.general import increment_path
+from utils.general import increment_path, calc_total_ratio
 from pathlib import Path
 
 
@@ -103,13 +103,6 @@ def train(model, hyp, opt):
         f"acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {test_losses}")
 
     return train_losses, train_accuracies, accuracy_top1, accuracy_top5
-
-
-def calc_total_pruning(ratios):
-    x = 100
-    for r in ratios:
-        x = x - (x * r)
-    return (100 - x) / 100
 
 
 if __name__ == '__main__':
@@ -210,10 +203,10 @@ if __name__ == '__main__':
             data['train_accuracies'].append(train_accuracies)
     elif opt.task == 'iterative_pruning':
         ratios = [
-            [0.1, 0.3],
-            [0.1, 0.3, 0.5],
-            [0.3, 0.5],
-            [0.3, 0.5, 0.7],
+            [0.1, 0.1],
+            # [0.1, 0.3, 0.5],
+            # [0.3, 0.5],
+            # [0.3, 0.5, 0.7],
         ]
         pruned_layers = []
         if opt.pruning_type == 'batchnorm':
@@ -253,6 +246,8 @@ if __name__ == '__main__':
             # Save metrics
             if data.get("ratio", -1) == -1:
                 data["ratio"] = []
+            if data.get("total_ratio", -1) == -1:
+                data["total_ratio"] = []
             if data.get("top1", -1) == -1:
                 data["top1"] = []
             if data.get("top5", -1) == -1:
@@ -262,7 +257,8 @@ if __name__ == '__main__':
             if data.get("train_accuracies", -1) == -1:
                 data["train_accuracies"] = []
 
-            data["ratio"].append(calc_total_pruning(r))
+            data["ratio"].append(r)
+            data["total_ratio"].append(calc_total_ratio(r))
             data['top1'].append(accuracy_top1)
             data['top5'].append(accuracy_top5)
             data['train_losses'].append(train_losses)
