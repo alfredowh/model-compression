@@ -133,7 +133,7 @@ if __name__ == '__main__':
                 model = pruning.scaling_based_pruning(batch_norms=pruned_layers, pruning_ratio=p, level=opt.level,
                                                       scale_threshold=opt.scale_threshold)
             elif opt.pruning_type == 'magnitude':
-                model = pruning.scaling_based_pruning(conv_layers=pruned_layers, pruning_ratio=p, level=opt.level,
+                model = pruning.magnitude_based_pruning(conv_layers=pruned_layers, pruning_ratio=p, level=opt.level,
                                                       scale_threshold=opt.scale_threshold)
 
             accuracy_top1, accuracy_top5, losses = test(model, DEVICE, test_dataloader)
