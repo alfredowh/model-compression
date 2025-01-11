@@ -111,10 +111,8 @@ def compare_test_metrics(datas, labels: List[str]) -> None:
 
     plt.plot(np.linspace(-1, len(x), 10), np.ones(10) * acc_top1, color="red", linestyle="dashed", linewidth=1)
 
-    width = 0.5 / len(datas)
-
     for idx, data in enumerate(datas):
-        plt.plot(datas[0]["ratio"], np.array(data["top1"]) * 100, label=labels[idx], marker="o", linewidth=1)
+        plt.plot(datas[idx]["ratio"], np.array(data["top1"]) * 100, label=labels[idx], marker="o", linewidth=1)
 
     plt.xlabel("Pruning Ratio")
     plt.ylabel("Acc@1 in %")
@@ -130,7 +128,7 @@ def compare_test_metrics(datas, labels: List[str]) -> None:
     plt.plot(np.linspace(-1, len(x), 10), np.ones(10) * acc_top5, color="red", linestyle="dashed", linewidth=1)
 
     for idx, data in enumerate(datas):
-        plt.plot(datas[0]["ratio"], np.array(data["top5"]) * 100, label=labels[idx], marker="o", linewidth=1)
+        plt.plot(datas[idx]["ratio"], np.array(data["top5"]) * 100, label=labels[idx], marker="o", linewidth=1)
 
     plt.xlabel("Pruning Ratio")
     plt.ylabel("Acc@5 in %")
