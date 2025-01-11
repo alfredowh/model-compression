@@ -119,7 +119,7 @@ class Pruning():
         print(ori)
         print(pruned)
         print("-" * 100)
-        print(" ".join(f"{item:<5}" if item > 0 else f"{str(1):<5}" for item in diff))
+        print(" ".join(f"{item:<5}" for item in diff))
 
         return self.model
 
@@ -222,7 +222,7 @@ class Pruning():
         print(ori)
         print(pruned)
         print("-" * 100)
-        print(" ".join(f"{item:<5}" if item > 0 else f"{str(1):<5}" for item in diff))
+        print(" ".join(f"{item:<5}" for item in diff))
 
         return self.model
 
