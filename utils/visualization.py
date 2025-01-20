@@ -1,9 +1,11 @@
 import matplotlib.pyplot as plt
-from typing import Literal, List
+from typing import Literal, List, Tuple
 import numpy as np
 import torch
 from torchvision import models
 from models.pruning import Pruning
+import time
+import torch
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1').to(DEVICE).eval()
@@ -169,3 +171,106 @@ def iter_ratios(pruned_layers, pruning_ratios, pruning_type, level="global"):
     plt.xlabel("Conv Layer")
     plt.grid(axis="y", linestyle="--", alpha=0.5)
     plt.legend()
+
+
+def measure_inference_speed(model, input_size: Tuple[int], device: torch.device) -> Tuple[float]:
+    times = []
+    with torch.no_grad():
+        inputs = torch.randn(1, 3, *input_size).to(device)
+        # Warm up the model (optional, especially for GPU)
+        for _ in range(5):
+            model(inputs)
+
+        for _ in range(20):  # Run multiple iterations
+            start_time = time.time()
+            model(inputs)
+            end_time = time.time()
+            times.append(end_time - start_time)
+
+    times = np.array(times)
+    avg_time = np.mean(times)
+    std_time = np.std(times)
+    return avg_time, std_time
+
+
+def plot_speed(pruning_ratios, title, device, level="global", input_size=(224, 224), width: float = 0.4) -> None:
+    avg_times = []
+    std_times = []
+
+    for idx, ratio in enumerate(pruning_ratios):
+        model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1').to(device).eval()
+
+        if ratio == 0.0:
+            avg_time, std_time = measure_inference_speed(model, input_size, device)
+
+        elif ratio > 0.0 and ratio < 1.0:
+            pruning = Pruning(model, device)
+            pruned_layers = []
+            for i in range(1, 18):
+                if i == 1:
+                    pruned_layers.append(f'features.{i}.conv.0.1')
+                    continue
+                pruned_layers.append(f'features.{i}.conv.1.1')
+            model = pruning.scaling_based_pruning(batch_norms=pruned_layers, pruning_ratio=ratio, level=level,
+                                                  scale_threshold=False)
+            avg_time, std_time = measure_inference_speed(model, input_size, device)
+        else:
+            raise ValueError("Ratio must be < 1.0")
+
+        avg_times.append(avg_time)
+        std_times.append(std_time)
+
+    x = np.arange(len(pruning_ratios))
+
+    plt.figure(figsize=(8, 5))
+    plt.title(title)
+
+    plt.bar(x, avg_times, width, yerr=std_times, capsize=5)
+    plt.xlabel("Pruning Ratio")
+    plt.ylabel("Time (s)")
+    plt.grid(ls="--", axis="y", alpha=0.5)
+    plt.xticks(x, pruning_ratios)
+    plt.show()
+
+def plot_speed_acc(data, pruning_ratios, device, level="global", input_size=(224, 224)) -> None:
+    avg_times = []
+
+    for idx, ratio in enumerate(pruning_ratios):
+        model = models.mobilenet_v2(weights='MobileNet_V2_Weights.IMAGENET1K_V1').to(device).eval()
+
+        if ratio == 0.0:
+            avg_time, std_time = measure_inference_speed(model, input_size, device)
+
+        elif ratio > 0.0 and ratio < 1.0:
+            pruning = Pruning(model, device)
+            pruned_layers = []
+            for i in range(1, 18):
+                if i == 1:
+                    pruned_layers.append(f'features.{i}.conv.0.1')
+                    continue
+                pruned_layers.append(f'features.{i}.conv.1.1')
+            model = pruning.scaling_based_pruning(batch_norms=pruned_layers, pruning_ratio=ratio, level=level,
+                                                  scale_threshold=False)
+            avg_time, _ = measure_inference_speed(model, input_size, device)
+        else:
+            raise ValueError("Ratio must be < 1.0")
+
+        avg_times.append(avg_time)
+
+    plt.figure(figsize=(5, 5))
+    plt.title(f"Accuracy over Inference Time ({device})")
+
+    accs = [acc_top5]
+    accs.extend(data["top5"])
+
+    for idx, r in enumerate(pruning_ratios):
+        if r == 0.0:
+            plt.plot(avg_times[idx], accs[idx], label="original", marker="o")
+            continue
+        plt.plot(avg_times[idx], accs[idx] * 100, label=f"ratio: {r}", marker="o")
+
+    plt.ylim([0, 100])
+    plt.xlabel("Inference Time (s)")
+    plt.ylabel("Accuracy")
+    plt.legend(loc="lower right")
+    plt.show()
