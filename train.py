@@ -91,6 +91,10 @@ def train(model, hyp, opt, teacher=None):
             train_loss = loss_fn(outputs, targets)
 
             if opt.kd:
+                # Weighted sum of the two losses
+                kd_loss_weight = float(hyp.get("kd_loss_weight", 0.25))
+                ce_loss_weight = float(hyp.get("ce_weight", 0.75))
+
                 if opt.kd_type == "logits":
                     with torch.no_grad():
                         teacher_logits = teacher(inputs)
@@ -104,10 +108,6 @@ def train(model, hyp, opt, teacher=None):
                     # Calculate the KL Divergence loss scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
                     soft_kl_loss = torch.sum(soft_targets * (soft_targets.log() - soft_prob)) / soft_prob.size()[
                         0] * (T ** 2)
-
-                    # Weighted sum of the two losses
-                    kd_loss_weight = float(hyp.get("kd_loss_weight", 0.25))
-                    ce_loss_weight = float(hyp.get("ce_weight", 0.75))
 
                     train_loss = kd_loss_weight * soft_kl_loss + ce_loss_weight * train_loss
 
@@ -260,10 +260,7 @@ if __name__ == '__main__':
             data['train_accuracies'].append(train_accuracies)
     elif opt.task == 'iterative_pruning':
         ratios = [
-            [0.1, 0.1],
-            # [0.1, 0.3, 0.5],
-            # [0.3, 0.5],
-            # [0.3, 0.5, 0.7],
+            [0.1, 0.1], [0.1, 0.3], [0.3, 0.3], [0.3, 0.5], [0.5, 0.5], [0.5, 0.7], [0.7, 0.7],
         ]
         pruned_layers = []
         if opt.pruning_type == 'batchnorm':
