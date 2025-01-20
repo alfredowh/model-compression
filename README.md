@@ -5,7 +5,7 @@ Repository for model compression project using pruning and knowledge distillatio
     <img src="assets/pruning_methods.png" alt="img" width="540"/>
 </p>
 
-- Fine-Tuning methods: Retraining, Iterative Pruning, Knowledge Distillation
+- Fine-Tuning methods: `Retraining`, `Iterative Pruning`, `Knowledge Distillation` 
 ## Setup
 
 1. Download the ImageNet dataset
