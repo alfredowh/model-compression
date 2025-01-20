@@ -1,6 +1,9 @@
 # Model Compression
 Repository for model compression project using pruning and knowledge distillation methods.
 - Pruning methods:
+<p align="center">
+    <img src="assets/pruning_methods.png" alt="img" width="540"/>
+</p>
 
 - Fine-Tuning methods: Retraining, Iterative Pruning, Knowledge Distillation
 ## Setup
