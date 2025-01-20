@@ -1,0 +1,25 @@
+ratios:
+- 0.1
+- 0.3
+- 0.5
+- 0.7
+- 0.9
+task: retraining
+pruning_type: batchnorm
+uniform: false
+seed: 42
+hyp: data/hyp.retraining.yaml
+root: data/imagenet
+weights: MobileNet_V2_Weights.IMAGENET1K_V1
+epochs: 20
+adam: false
+batch_size: 16
+test_size: 0.2
+scale_threshold: false
+workers: 8
+project: runs/train
+name: exp
+save_dir: !!python/object/apply:pathlib.PosixPath
+- runs
+- train
+- exp27
