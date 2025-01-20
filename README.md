@@ -16,7 +16,7 @@ Repository for model compression project using pruning and knowledge distillatio
 
 ``` bash
 .
-├── data                        # ImageNet data, hyperparameter .yaml
+├── data/                       # ImageNet data, hyperparameter .yaml
 ├── models/                     # model architecture & pruning 
 ├── notebooks/                  # Exploration & eval notebook
 ├── runs/                       # Experiment results
