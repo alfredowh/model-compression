@@ -9,8 +9,10 @@ Repository for model compression project using pruning and knowledge distillatio
 ## Setup
 
 1. Download the ImageNet dataset
-2. Run training using `train.py`
-3. Evaluate models using `test.py`
+2. Visualization of model exploration in `notebooks/model_exploration.ipynb`
+3. Run training using `train.py`
+4. Evaluate models using `test.py`
+5. Visualization of model evaluation in `notebooks/evaluation.ipynb`
 
 ## Folder Structure
 
@@ -20,6 +22,7 @@ Repository for model compression project using pruning and knowledge distillatio
 ├── models/                     # model architecture & pruning 
 ├── notebooks/                  # Exploration & eval notebook
 ├── runs/                       # Experiment results
+├── scripts/                    # Example of sh scripts to run training & test
 ├── utils/                      # Utility functions
 ├── train.py                    # Training script
 └── test.py                     # Eval script
