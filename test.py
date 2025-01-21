@@ -65,7 +65,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
     parser.add_argument('--ratios', nargs='+', type=float, default=[0.1, 0.3, 0.5, 0.7, 0.9],
                         help='Pruning ratio for eval iteration')
-    parser.add_argument('--task', type=str, default='global_pruning', help='global_pruning or sensivity_analysis')
+    parser.add_argument('--task', type=str, default='pruning', help='pruning or sensivity_analysis')
     parser.add_argument('--pruning-type', type=str, default='batchnorm', help='batchnorm or magnitude')
     parser.add_argument('--level', type=str, default='global', help='global or layerwise')
     parser.add_argument('--test-size', type=float, default=0.2, help='Test split ratio')
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     print(f"Full Model - acc@1: {accuracy_top1 * 100}%, acc@5: {accuracy_top5 * 100}%, loss: {losses}")
 
     data = {}
-    if opt.task == 'global_pruning':
+    if opt.task == 'pruning':
         pruned_layers = []
         if opt.pruning_type == 'batchnorm':
             for i in range(1, 18):
