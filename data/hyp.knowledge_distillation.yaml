@@ -5,3 +5,5 @@ fliph: 0.0  # image horizontal flip (probability)
 #warmup_epochs: 3.0  # warmup epochs (fractions ok)
 #warmup_momentum: 0.8  # warmup initial momentum
 #warmup_bias_lr: 0.1  # warmup initial bias lr
+ce_weight: 0.75 # cross-entropy loss weight only by knowledge distillation
+kd_loss_weight: 0.25  # knowledge distillation loss weight only by knowledge distillation
