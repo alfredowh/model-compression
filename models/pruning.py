@@ -7,6 +7,32 @@ import json
 
 
 class Pruning():
+    """
+    A class used to perform pruning on a model.
+
+    Attributes
+    ----------
+    device: torch.device
+        define the local device
+    model: torchvision.models
+        define the model to prune
+    magnitudes: Dict[str, float]
+        dictionary containing the Ln-Norm of channels. Only by magnitude-based pruning
+
+    Methods
+    -------
+    scaling_based_pruning()
+        performs set of scaling based pruning methods
+    magnitude_based_pruning()
+        performs set of magnitude-based pruning methods
+    calculate_threshold()
+        calculate threshold for global pruning
+    prune_layer()
+        prune a layer with defined channel index
+    count_parameters()
+        count the number of parameters in all conv layers
+    """
+
     def __init__(self, model, device: Optional[torch.device] = None):
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -18,7 +44,7 @@ class Pruning():
     def scaling_based_pruning(self, batch_norms: List[str], pruning_ratio: Union[List[float], float],
                               level: Literal['layerwise', 'global'], scale_threshold: Optional[bool] = False):
         """
-        This function implements layer-wise scaling based pruning algorithm.
+        This function implements scaling-based pruning algorithm.
 
         Parameters
         ----------
@@ -30,6 +56,7 @@ class Pruning():
             define the pruning level
         scale_threshold: bool
             Scale the gamma of batch normalization layers based on sensivity analysis
+
         Returns
         -------
         torchvision.models
@@ -125,6 +152,28 @@ class Pruning():
 
     def magnitude_based_pruning(self, conv_layers: List[str], pruning_ratio: Union[List[float], float],
                                 level: Literal['layerwise', 'global'], ord: int = 1, scale_threshold: bool = False):
+        """
+        This function implements magnitude-based pruning algorithm.
+
+        Parameters
+        ----------
+        conv_layers: list
+            list of conv layers to prune
+        pruning_ratio: list or float
+            list or single prune percentage
+        level: 'layerwise' or 'global'
+            define the pruning level
+        ord: int
+            define the order of Ln-Norm
+        scale_threshold: bool
+            Scale the gamma of batch normalization layers based on sensivity analysis
+
+        Returns
+        -------
+        torchvision.models
+            Pruned model
+        """
+
         if isinstance(pruning_ratio, list):
             if len(conv_layers) != len(pruning_ratio):
                 raise ValueError('Number of batch normalization layers must equal number of prune percentage')
@@ -229,6 +278,29 @@ class Pruning():
     def calculate_threshold(self, layer_names: List[str], pruning_ratio: float, scale_threshold: bool,
                             pruning_type: Literal["scaling", "magnitude"], top5: float = 90.31) -> Tuple[
         float, np.ndarray]:
+        """
+        This function calculates the threshold for global pruning.
+
+        Parameters
+        ----------
+        layer_names: list
+            list of layers to consider
+        pruning_ratio: float
+            prune percentage target
+        scale_threshold: bool
+            Scale the gamma of batch normalization layers based on sensivity analysis
+        pruning_type: 'scaling' or 'magnitude'
+            define the pruning type
+        top5: float
+            define the Top-5 Accuracy, neccesary if scale_threshold is True
+
+        Returns
+        -------
+        float
+            Threshold
+        np.ndarray
+            Scales of criterion
+        """
 
         scales = {}
 
@@ -291,6 +363,23 @@ class Pruning():
         return threshold, scales
 
     def prune_layer(self, layer: torch.nn.modules, keep_indices: np.ndarray, is_input: bool = False) -> None:
+        """
+        This function prune a layer with defined index.
+
+        Parameters
+        ----------
+        layer: torch.nn.modules
+            layer to prune
+        keep_indices: np.ndarray
+            index of the channel to keep
+        is_input: bool, optional
+            layer is an input layer (default is False)
+
+        Returns
+        -------
+
+        """
+
         if isinstance(layer, nn.Conv2d):
             if is_input:
                 # Prune input channels
@@ -327,6 +416,19 @@ class Pruning():
             layer.num_features = layer.weight.size(0)
 
     def count_parameters(self) -> Dict[str, int]:
+        """
+        This function counts the number of parameters in all layers.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        Dict[str, int]
+            Dictionary of layer names and their number of parameters in all layers.
+
+        """
+
         data = {}
         total = 0
         for name, module in self.model.named_modules():
