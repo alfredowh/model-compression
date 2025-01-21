@@ -1,4 +1,0 @@
-lr: 0.05
-momentum: 0.9
-fliph: 0.0
-weight_decay: 4e-5
