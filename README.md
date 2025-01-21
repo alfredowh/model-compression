@@ -24,6 +24,9 @@ Repository for model compression project using pruning and knowledge distillatio
 ├── runs/                       # Experiment results
 ├── scripts/                    # Example of sh scripts to run training & test
 ├── utils/                      # Utility functions
+├── .gitignore                      
+├── README.md                      
+├── requirements.txt                      
 ├── train.py                    # Training script
 └── test.py                     # Eval script
 ```
