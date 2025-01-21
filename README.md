@@ -8,7 +8,7 @@ Repository for model compression project using pruning and knowledge distillatio
 - Fine-Tuning methods: `Retraining`, `Iterative Pruning`, `Knowledge Distillation` 
 ## Setup
 
-1. Download the ImageNet 2012 dataset from [here](https://image-net.org/challenges/LSVRC/2012/2012-downloads.php) and place the files `ILSVRC2012_devkit_t12.tar.gz` and `ILSVRC2012_img_train.tar` or `ILSVRC2012_img_val.tar` based on data split in the data root directory.
+1. Download the ImageNet 2012 dataset from [here](https://image-net.org/challenges/LSVRC/2012/2012-downloads.php) and place the files `ILSVRC2012_devkit_t12.tar.gz` and `ILSVRC2012_img_train.tar` or `ILSVRC2012_img_val.tar` based on data split (train, val, test) in the data root directory `data/imagenet`.
 2. Visualization of model exploration in `notebooks/model_exploration.ipynb`
 3. Run training using `train.py`
 4. Evaluate models using `test.py`
